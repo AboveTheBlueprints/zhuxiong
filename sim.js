@@ -1,4 +1,4 @@
-// 猪兄（第五个，第 18 天 12:15 照 ~/碰/猪兄/猪兄.py v5 搬过来）。规矩写在 猪兄.py 开头和 预期.md，页面上不写。
+// 猪兄（第五个，第 18 天 12:15 照 ~/碰/猪兄/猪兄.py v5 搬过来；12:43 加 v6：连着两步挡着就喊让开、结尾同一句并成一行）。规矩写在 猪兄.py 开头和 预期.md，页面上不写。
 // 网页和 node 都用这一份；node 里拿来跟 python 逐串对。
 (function () {
   const W = 11;
@@ -21,7 +21,7 @@
   function cheb(ax, ay, bx, by) { return Math.max(Math.abs(ax - bx), Math.abs(ay - by)); }
 
   class Man {
-    constructor(kind, k, x, y) { this.kind = kind; this.name = NAMES[kind][k]; this.x = x; this.y = y; this.aim = false; this.down = 0; }
+    constructor(kind, k, x, y) { this.kind = kind; this.name = NAMES[kind][k]; this.x = x; this.y = y; this.aim = false; this.down = 0; this.stuck = null; this.told = null; this.gaveup = null; }
     label(f) {
       const t = (this.kind === '手' ? '拿手枪的' : '拿火枪的') + this.name;
       if (!f) return t;
@@ -100,7 +100,17 @@
         if (!ok && behind) {
           note.push(`${m.label(this)}枪口冲着你，没开：你那头站着${behind.label(this)}。`);
           this.log.push([this.t, `${m.label(this)}没开，你身后是${behind.name}`]);
-        }
+          // v6：同一个人连着两步挡着他，他就喊那人让开；那人下一步挪开
+          if (m.stuck && m.stuck[0] === behind && m.stuck[1] === this.t - 1) {
+            if (!behind.down && behind.told === null && m.gaveup !== behind) {
+              behind.told = m;
+              note.push(`${m.label()}冲${behind.name}喊：让开！`);
+              this.log.push([this.t, `${m.name}喊${behind.name}让开`]);
+            }
+          }
+          if (m.gaveup !== null && m.gaveup !== behind) m.gaveup = null;
+          m.stuck = [behind, this.t];
+        } else { m.stuck = null; m.gaveup = null; }
       }
       if (this.t % SHRINK === 0 && this.ring > 2) {
         this.ring -= 1;
@@ -114,7 +124,28 @@
       }
       const old = this.men.map(m => m.x + ',' + m.y);
       const moves = [];
+      const lt = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return true; if (a[i] > b[i]) return false; } return false; };
       for (const m of this.men) {
+        if (m.told !== null && !m.down) {
+          const boss = m.told; m.told = null;
+          let best = [m.x, m.y], bk = null;
+          for (const ddx of [-1, 0, 1]) for (const ddy of [-1, 0, 1]) {
+            const x = m.x + ddx, y = m.y + ddy;
+            if ((ddx === 0 && ddy === 0) || !(x >= 0 && x < W && y >= 0 && y < W)) continue;
+            if (cheb(x, y, this.px, this.py) <= 1) continue;
+            if (cheb(x, y, 5, 5) !== this.ring) continue;
+            if (old.includes(x + ',' + y)) continue;
+            const mx = m.x, my = m.y; m.x = x; m.y = y;
+            const still = this.shot(boss, this.px, this.py)[1] === m;
+            m.x = mx; m.y = my;
+            const [ok] = this.shot(m, this.px, this.py, [x, y]);
+            const k = [still ? 1 : 0, ok ? 0 : 1, cheb(x, y, this.px, this.py)];
+            if (bk === null || lt(k, bk)) { bk = k; best = [x, y]; }
+          }
+          if (best[0] === m.x && best[1] === m.y) { note.push(`${m.name}挤在那儿，没处让。`); boss.gaveup = m; }
+          moves.push(best); continue;
+        }
+        m.told = null;
         if (m.down) {
           m.down -= 1;
           if (m.down === 0) note.push(`${m.label(this)}爬起来了。`);
@@ -159,7 +190,7 @@
       if (x === this.px && y === this.py) return { t: this.dead ? '死' : '猪', k: this.dead ? 'dead' : 'pig' };
       if (this.shotline.some(([a, b]) => a === x && b === y)) return { t: '×', k: 'line' };
       const m = this.at(x, y);
-      if (m) return { t: SHORT[m.name], k: (m.kind === '手' ? 'shou' : 'huo') + (m.down ? ' down' : '') + (m.aim ? ' aim' : ''), man: m };
+      if (m) return { t: SHORT[m.name], k: (m.kind === '手' ? 'shou' : 'huo') + (m.down ? ' down' : '') + (m.aim ? ' aim' : '') + (m.told ? ' told' : ''), man: m };
       if (x === 0 || x === W - 1 || y === 0 || y === W - 1) return { t: '蔗', k: 'cane' };
       return { t: '・', k: 'empty' };
     }
@@ -182,6 +213,20 @@
     }
   }
 
+  function runs(log) {
+    // v6：同一句连着几步并成一行；返回 [从, 到, 句]
+    const rs = [];
+    for (const [t, s] of log) {
+      const last = rs[rs.length - 1];
+      if (last && last[2] === s && last[1] === t - 1) { last[1] = t; continue; }
+      if (last && last[2] === s && last[1] === t) continue;
+      const r = rs.find(r => r[2] === s && r[1] === t - 1);
+      if (r) r[1] = t; else rs.push([t, t, s]);
+    }
+    return rs;
+  }
+  function runText(r) { return r[0] === r[1] ? `第 ${r[0]} 步，${r[2]}` : `第 ${r[0]}–${r[1]} 步，${r[2]}（连着 ${r[1] - r[0] + 1} 步）`; }
+
   function textRun(seed, acts) {
     // 跟 python main() 打印的一字不差（拿来对）
     const out = [];
@@ -200,13 +245,13 @@
     if (f.dead || f.out) {
       out.push('\n==== 完了 ====');
       out.push(f.out ? '你跑了。' : '你被打死了。');
-      if (f.log.length) { out.push('这一路上：'); for (const [t, s] of f.log) out.push(`  第 ${t} 步，${s}`); }
+      if (f.log.length) { out.push('这一路上：'); for (const r of runs(f.log)) out.push('  ' + runText(r)); }
       const saved = f.log.filter(([t, s]) => s.includes('没开'));
       out.push(`有 ${saved.length} 回，枪口对着你，因为你那头站着他们自己人，没开。`);
     }
     return out.join('\n');
   }
 
-  const api = { Field, DIRS, DIRKEYS, W, textRun, SHORT };
+  const api = { Field, DIRS, DIRKEYS, W, textRun, SHORT, runs, runText };
   if (typeof module !== 'undefined') module.exports = api; else window.ZHU = api;
 })();

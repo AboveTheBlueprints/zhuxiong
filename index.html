@@ -21,6 +21,7 @@
   td.huo { color: #b2462b; }
   td.aim { font-weight: bold; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; background: #f3e6c4; }
   td.down { color: #aaa49a; background: #e4ded2; }
+  td.told { outline: 2px dashed #b04a2a; outline-offset: -3px; }
   #now p { margin: 0; }
   #now p.head { font-weight: bold; margin-top: 4px; }
   #old { color: #8a8170; font-size: 14px; margin-bottom: 6px; }
@@ -90,7 +91,7 @@ function render() {
     pad.innerHTML = '';
     document.getElementById('keys').style.display = 'none';
     let e = `<p class="head" style="font-weight:bold;margin-top:6px">${f.out ? '你跑了。' : '你被打死了。'}</p>`;
-    if (f.log.length) { e += '<p>这一路上：</p>' + f.log.map(([t, s]) => `<p>　第 ${t} 步，${s}</p>`).join(''); }
+    if (f.log.length) { e += '<p>这一路上：</p>' + ZHU.runs(f.log).map(r => `<p>　${ZHU.runText(r)}</p>`).join(''); }
     const saved = f.log.filter(([t, s]) => s.includes('没开')).length;
     e += `<p>有 ${saved} 回，枪口对着你，因为你那头站着他们自己人，没开。</p>`;
     e += '<div class="row"><button id="again">同一块地再来</button><button id="next">换一块地</button></div>';
