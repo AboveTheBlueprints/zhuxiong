@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>猪兄</title>
+<style>
+  body { background: #efeae0; color: #2b2a26; font: 17px/1.75 "PingFang SC", "Noto Serif SC", serif; margin: 0; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 100px; }
+  h1 { font-size: 22px; font-weight: normal; letter-spacing: 6px; margin: 0 0 10px; }
+  .intro { color: #5a5446; font-size: 15px; margin: 0 0 12px; }
+  .intro b { font-weight: normal; }
+  table.g { border-collapse: collapse; margin: 6px 0 10px; }
+  table.g td { width: 30px; height: 30px; text-align: center; vertical-align: middle; font-size: 19px; padding: 0; }
+  td.cane { color: #8fa36a; background: #e3e6cf; font-size: 13px; }
+  td.empty { color: #c9c1ae; }
+  td.pig { font-weight: bold; color: #2b2a26; background: #f6d7d2; border-radius: 50%; }
+  td.dead { font-weight: bold; color: #fff; background: #8a2a1e; }
+  td.line { color: #b3261e; font-weight: bold; }
+  td.shou { color: #2d5a8a; }
+  td.huo { color: #b2462b; }
+  td.aim { font-weight: bold; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; background: #f3e6c4; }
+  td.down { color: #aaa49a; text-decoration: line-through; }
+  #now p { margin: 0; }
+  #now p.head { font-weight: bold; margin-top: 4px; }
+  #old { color: #8a8170; font-size: 14px; margin-bottom: 6px; }
+  #old p { margin: 0; }
+  #pad { display: grid; grid-template-columns: repeat(3, 64px); gap: 6px; margin-top: 14px; }
+  button { font: inherit; font-size: 16px; padding: 6px 0; border: 1px solid #8a7d66; background: #f8f4ea; color: #2b2a26; border-radius: 3px; cursor: pointer; }
+  button:hover { background: #fffaf0; }
+  #end { margin-top: 14px; }
+  #end p { margin: 0; }
+  #end .row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #end .row button { padding: 6px 14px; }
+  .keys { color: #9a9080; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+<h1>猪 兄</h1>
+<p class="intro">猪场外头的空地。四边是甘蔗地。<br><b style="color:#2d5a8a">蓝字</b>拿手枪，<b style="color:#b2462b">红字</b>拿火枪，字是各人的姓；字底下画了道、底色发黄，是他把枪端起来了。划掉的灰字是躺着的。</p>
+<div id="grid"></div>
+<div id="old"></div>
+<div id="now"></div>
+<div id="pad"></div>
+<div class="keys" id="keys">键盘也能走：Q W E / A S D / Z X C，S 是停。</div>
+<div id="end"></div>
+</main>
+<script src="sim.js"></script>
+<script>
+// 猪兄网页（第五个，第 18 天 12:16）。规矩在 sim.js 和 ~/碰/猪兄/猪兄.py，页面上不写。
+// 每走一步从头重放（跟终端那版一样），seed 从网址 ?seed= 来，不写是 1。
+const Z = window.ZHU;
+const params = new URLSearchParams(location.search);
+let seed = parseInt(params.get('seed') || '1', 10) || 1;
+let acts = [];
+
+function replay() {
+  const f = new Z.Field(seed);
+  const steps = [];
+  for (const a of acts) { if (f.dead || f.out) break; steps.push({ a, t: f.t + 1, note: f.step(a) }); }
+  return { f, steps };
+}
+
+function render() {
+  const { f, steps } = replay();
+  // 图
+  let h = '<table class="g">';
+  for (let y = 0; y < Z.W; y++) {
+    h += '<tr>';
+    for (let x = 0; x < Z.W; x++) {
+      const c = f.cell(x, y);
+      const title = c.man ? ` title="${c.man.label()}"` : '';
+      h += `<td class="${c.k}"${title}>${c.t}</td>`;
+    }
+    h += '</tr>';
+  }
+  document.getElementById('grid').innerHTML = h + '</table>';
+  // 前两步淡着放，这一步放亮
+  const old = steps.slice(Math.max(0, steps.length - 3), steps.length - 1);
+  document.getElementById('old').innerHTML = old.map(s => `<p>第 ${s.t} 步：${s.a}${s.note.length ? '　' + s.note.join('　') : ''}</p>`).join('');
+  const last = steps[steps.length - 1];
+  document.getElementById('now').innerHTML = last
+    ? `<p class="head">第 ${last.t} 步：${last.a}</p>` + last.note.map(n => `<p>${n}</p>`).join('')
+    : '<p>你在正中间。</p>';
+  // 按钮
+  const pad = document.getElementById('pad');
+  const end = document.getElementById('end');
+  if (f.dead || f.out) {
+    pad.innerHTML = '';
+    document.getElementById('keys').style.display = 'none';
+    let e = `<p class="head" style="font-weight:bold;margin-top:6px">${f.out ? '你跑了。' : '你被打死了。'}</p>`;
+    if (f.log.length) { e += '<p>这一路上：</p>' + f.log.map(([t, s]) => `<p>　第 ${t} 步，${s}</p>`).join(''); }
+    const saved = f.log.filter(([t, s]) => s.includes('没开')).length;
+    e += `<p>有 ${saved} 回，枪口对着你，因为你那头站着他们自己人，没开。</p>`;
+    e += '<div class="row"><button id="again">同一块地再来</button><button id="next">换一块地</button></div>';
+    end.innerHTML = e;
+    document.getElementById('again').onclick = () => { acts = []; render(); };
+    document.getElementById('next').onclick = () => { seed += 1; acts = []; history.replaceState(null, '', '?seed=' + seed); render(); };
+  } else {
+    end.innerHTML = '';
+    document.getElementById('keys').style.display = '';
+    const order = ['左上', '上', '右上', '左', '停', '右', '左下', '下', '右下'];
+    pad.innerHTML = order.map(a => `<button data-a="${a}">${a}</button>`).join('');
+    pad.querySelectorAll('button').forEach(b => b.onclick = () => go(b.dataset.a));
+  }
+}
+
+function go(a) {
+  const { f } = replay();
+  if (f.dead || f.out) return;
+  acts.push(a);
+  render();
+}
+
+const KEYS = { q: '左上', w: '上', e: '右上', a: '左', s: '停', d: '右', z: '左下', x: '下', c: '右下' };
+document.addEventListener('keydown', ev => { const a = KEYS[ev.key.toLowerCase()]; if (a) go(a); });
+render();
+</script>
+</body>
+</html>
